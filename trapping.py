@@ -54,7 +54,7 @@ class trap:
             warnings.simplefilter("ignore")
             self.potentials = self.Simul.potentials.astype(float)
 
-    def potential2d(self, power_b=40e-3, power_r=5e-3, mF = 0, remove_center=False, includeVdW=True):
+    def get_potential2d(self, power_b=40e-3, power_r=5e-3, mF = 0, remove_center=False, includeVdW=True):
         pot = power_b*self.potentials[0,:,:,mF+2]+power_r*self.potentials[1,:,:,mF+2]#+power_b/2*self.potentials[2,:,:,mF+2]
         if includeVdW:
             pot+=self.Simul.CP
@@ -71,9 +71,9 @@ class trap:
 
 
     def plot_potential2d(self, power_b=1, power_r=1, mF = 0, remove_center=True, cmap='jet_r', includeVdW=True):
-        potential = self.potential2d(power_b, power_r, mF, remove_center=remove_center, includeVdW=includeVdW)
+        potential = self.get_potential2d(power_b, power_r, mF, remove_center=remove_center, includeVdW=includeVdW)
         if remove_center:
-            depth = -self.get_trap_depht(power_b, power_r)[mF+2]
+            depth = -self.get_trap_depht_and_position(power_b, power_r)[0][mF+2]
             potential[abs(potential)>depth*1.02]=0
             potential[potential>0.001]=0
         x = np.real(self.Simul.x)
@@ -111,15 +111,12 @@ class trap:
        pot = potentials[2]
        plt.plot((t-self.red.height/2)*1e9, pot)# , label="$m_f=%i$"%(i-2))
        plt.axvline(x=0, color='black')
-       # plt.legend()
        plt.title("Eigenmode %i at $\\lambda=%i$ nm, P=%.1f mW\n Eigenmode %i at $\\lambda=%i$ nm, P=%.1f mW"
                  %(self.eigen_b, self.blue.wavelength*1e9,power_b*1e3, self.eigen_r, self.red.wavelength*1e9,power_r*1e3))
        plt.xlabel("Distance from surface (nm)")
        plt.ylabel("Potential (mK)")
        ax = plt.gca()
-       depth = self.get_trap_depht(power_b, power_r)[2]
-       # depth=0
-       # ax.set_ylim([-1, 50e-3])
+       depth = self.get_trap_depht_and_position(power_b, power_r)[0][2]
        if depth!=0:
            t, potentials = self.get_potential1d(power_b, power_r, includeVdW=includeVdW)
            t = t[:80]
@@ -143,25 +140,9 @@ class trap:
                      fancybox=True, framealpha=0.7, 
                      handlelength=0, handletextpad=0)
        plt.tight_layout()
-       
-    def get_trap_depht(self, power_b, power_r, includeVdW=True, for_minimization=False):  
-        t, potentials = self.get_potential1d(power_b, power_r, includeVdW=includeVdW)
-        t = t[:80]
-        potentials = [el[:80] for el in potentials]
-        vmax = [argrelextrema(pot, np.greater)[0] for pot in potentials]
-        vmin = [argrelextrema(pot, np.less)[0] for pot in potentials]
-        depths = []
-        for i in range(len(vmax)):
-            if len(vmax[i])==1 and len(vmin[i])==1:
-                depths.append(-min(potentials[i][vmax[i]], 0) + potentials[i][vmin[i]])
-            elif for_minimization:
-                depths.append(0)                  
-            else:
-                depths.append(0)
-        return depths
 
     def optimize_blue_power(self, pb0=9e-3, pr=1e-3):
-        func = lambda pb: self.get_trap_depht(pb, pr, for_minimization=True)[2]
+        func = lambda pb: self.get_trap_depht_and_position(pb, pr, for_minimization=True)[0][2]
         res = so.minimize(func, pb0 , method='Nelder-Mead')  #, bounds = bnds)
         return res
         
@@ -196,66 +177,79 @@ class trap:
         r0 = r[z]+mr*(d[z]+1)
         b0 = b[z]+mb*(d[z]+1)
         if plot:
-            # plt.plot(r[zero_crossings]*1e3, -d[zero_crossings],"xr")
             plt.plot(r0*1e3, 1,"xr")
         return b0[0], r0[0]
+
+    def get_trap_depht_and_position(self, power_b, power_r, includeVdW=True, for_minimization=False):  
+        t, potentials = self.get_potential1d(power_b, power_r, includeVdW=includeVdW)
+        t = t[:80]
+        potentials = [el[:80] for el in potentials]
+        vmax = [argrelextrema(pot, np.greater)[0] for pot in potentials]
+        vmin = [argrelextrema(pot, np.less)[0] for pot in potentials]
+        depths = []
+        positions = []
+        for i in range(len(vmax)):
+            if len(vmax[i])==1 and len(vmin[i])==1:
+                depths.append(-min(potentials[i][vmax[i]], 0) + potentials[i][vmin[i]])
+                positions.append(np.real(t[vmin[i]]))
+            elif for_minimization:
+                depths.append(0)   
+                positions.append(0)
+            else:
+                depths.append(0)
+                positions.append(0)
+        return depths, positions 
+
+    def map_trap_depth_pos(self, length = 100, mF=0, plot=False):
+        depths = np.zeros((length,length))
+        positions = np.zeros((length,length))
+        x = np.linspace(0, 50e-3,length, endpoint=True)
+        y = np.linspace(0, 15e-3,length, endpoint=True)
+        for i in range(length):
+            for j in range(length):
+                depth, position = self.get_trap_depht_and_position(x[i],y[j])
+                depths[i,j], positions[i,j] = depth[mF+2], position[mF+2]
+        if plot:
+            plt.imshow(depths,
+                       extent=np.array([y.min(),y.max(),x.min(),x.max()])*1000,
+                       origin='lower',
+                       aspect=(y.max()-y.min())/(x.max()-x.min()),
+                       cmap='jet')
+            plt.colorbar()
+            plt.title("Trap depth (mK)")
+            plt.xlabel("Red detuned light power (mW)")
+            plt.ylabel("Blue detuned light power (mW)")
+            plt.figure()
+            plt.imshow(positions,
+                       extent=np.array([y.min(),y.max(),x.min(),x.max()])*1000,
+                       origin='lower',
+                       aspect=(y.max()-y.min())/(x.max()-x.min()),
+                       cmap='jet')
+            plt.colorbar()
+            plt.title("Trap position (nm)")
+            plt.xlabel("Red detuned light power (mW)")
+            plt.ylabel("Blue detuned light power (mW)")
+        return depths, positions, x, y        
+
 
 if __name__=="__main__":
     data_folder = os.path.join(os.getcwd(), "datafolder")
     height = 150e-9
     width = 1e-6
     aoi = [-width/2, height/2+500e-9, width/2, height/2]
-    # o_red = emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
-    # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+    o_red =  emepy_data(data_folder, height, width, 850e-9, 500, aoi, [], [], 2)
+    o_blue = emepy_data(data_folder, height, width, 690e-9, 500, aoi, [], [], 2)
     
-    o_red = comsol_data(data_folder+"/H_150_W_1000_9000.csv")
-    o_blue = comsol_data(data_folder+"/H_150_W_1000_7000.csv")
-
-    trapp = trap(o_blue, o_red)
-    b, r = trapp.get_powers_one_mK(plot=False)
-    # trapp.plot_potential1d(0,1000, includeVdW=True)
-    # trapp.plot_potential2d(40e-3,3e-3, remove_center=False, includeVdW=0)
-    trapp.plot_potential2d(b,r, remove_center=True, includeVdW=True)
-    trapp.plot_potential1d(b,r)
-    # print(trapp.get_trap_depht(40e-3,3e-3)[0])
-    
-    
-    # aoi = [-width/2, height/2+500e-9, width/2, height/2]
-    # # aoi=[]
-    # # o_red = emepy_data(data_folder, height, width, 850e-9, 1000, aoi, 2)
-    # # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, 2)
-    # o_blue_comsol = comsol_data(data_folder+"/H_150_W_1000_7000.csv")
-    # dx = o_blue_comsol.x[1]-o_blue_comsol.x[0]
-    # dy = o_blue_comsol.y[1]-o_blue_comsol.y[0]
-    # arrx = np.arange(-2.25e-6, 2.25e-6, dx)    
-    # arry = np.arange(-2.25e-6, 2.25e-6, dy)    
-    # aoi = [o_blue_comsol.x[0], o_blue_comsol.y[0], o_blue_comsol.x[-1], o_blue_comsol.y[-1]]
-    # # aoi2 = [o_blue_emempy.x[0], o_blue_emempy.y[0], o_blue_emempy.x[-1], o_blue_emempy.y[-1]]
-
-    # o_blue_emempy = emepy_data(data_folder, height, width, 700e-9, 1000, aoi, arrx, arry, 2)
-    # o_blue_emempy.plot_intensity(0)    
-    # e1 = o_blue_emempy.simu.get_Efield(0)
-    # e2 = o_blue_comsol.efields[0][4]
-    
-    
-    
-    
-    # o_blue = comsol_data(data_folder+"/H_150_W_1000_9000.csv")
-    
-    # trap = trap(o_blue, o_red)
-    # o_red.plot_intensity(0)
-    # trap.plot_potential1d(40e-3,6e-3)#,remove_center=False)
-    # trap.plot_potential2d(40e-3,6e-3)
-    # d = trap.potential2d(40e-3,6e-3)
-    # d = trap.plot_potential1d(000e-3,6000e-3)
-    # d = trap.get_trap_depht(40e-3,6e-3)
-    # b, r = trap.get_powers_one_mK()
-    # trap.plot_potential1d(b,r)
-    # plt.figure()
-    # o_red.plot_intensity(0)
-    
-    
-    
+    # o_red = comsol_data(data_folder+"/H_150_W_1000_860.csv")
+    # o_blue = comsol_data(data_folder+"/H_150_W_1000_700.csv")
+    t = trap(o_blue, o_red, 0,0)
+    t.red.plot_intensity(0)
+    plt.figure()
+    t.blue.plot_intensity(0)
+    # t.plot_potential1d(47e-3,6e-3)
+    # d,p, xx,yy = t.map_trap_depth_pos(plot=True)
+    # b,r = t.get_powers_one_mK()
+    # t.plot_potential2d(b,r)    
     
     
     

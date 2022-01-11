@@ -80,16 +80,20 @@ class simulation:
         
     def get_Efield(self, n_mode=0):
         if hasattr(self, "solver"):
-            Ex = np.transpose(self.solver.modes[n_mode].get_field('Ex', self.x, self.y))
-            Ey = np.transpose(self.solver.modes[n_mode].get_field('Ey', self.x, self.y))
-            Ez = np.transpose(self.solver.modes[n_mode].get_field('Ez', self.x, self.y))
+            mu0 = 4*np.pi*1e-7
+            c = 299792458
+            Ex = np.transpose(self.solver.modes[n_mode].get_field('Ex', self.x, self.y)) * np.sqrt(mu0 * c)
+            Ey = np.transpose(self.solver.modes[n_mode].get_field('Ey', self.x, self.y)) * np.sqrt(mu0 * c)
+            Ez = np.transpose(self.solver.modes[n_mode].get_field('Ez', self.x, self.y)) * np.sqrt(mu0 * c)
             return np.array([Ex[..., np.newaxis], Ey[..., np.newaxis], Ez[..., np.newaxis]])
         return self.formated_data[n_mode][4]
     
     def get_Hfield(self, n_mode=0):
-        Hx = np.transpose(self.solver.modes[n_mode].get_field('Hx', self.x, self.y))
-        Hy = np.transpose(self.solver.modes[n_mode].get_field('Hy', self.x, self.y))
-        Hz = np.transpose(self.solver.modes[n_mode].get_field('Hz', self.x, self.y))
+        mu0 = 4*np.pi*1e-7
+        c = 299792458
+        Hx = np.transpose(self.solver.modes[n_mode].get_field('Hx', self.x, self.y)) / np.sqrt(mu0 * c)
+        Hy = np.transpose(self.solver.modes[n_mode].get_field('Hy', self.x, self.y)) / np.sqrt(mu0 * c)
+        Hz = np.transpose(self.solver.modes[n_mode].get_field('Hz', self.x, self.y)) / np.sqrt(mu0 * c)
         return np.array([Hx[..., np.newaxis], Hy[..., np.newaxis], Hz[..., np.newaxis]])
     
     
@@ -406,7 +410,7 @@ def fictitous_compensation(s1, s2, nmode=0):  # Detuning in nanometers
 
 if __name__=="__main__":
     t=time.time()
-    s = simulation(wavelength=690e-9,  gridsize=1000, height=150e-9, nmodes=2)
+    s = simulation(wavelength=690e-9,  gridsize=80, height=150e-9, nmodes=2)
     tf = time.time()-t
     print(tf)
     # s.plot_fictitious_By(0)

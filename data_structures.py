@@ -67,8 +67,9 @@ class datastruct:
         x = dat[1]
         y = dat[2]
         e_field = dat[4]
-        intensity = np.zeros((len(x), len(y)))
-        intensity = 0.5*pu.cc*np.sqrt(1)*(abs(e_field)**2).sum(axis=0)[:,:,0] #  TODO: insert effective refractive index here
+        # intensity = np.zeros((len(x), len(y)))
+        # intensity = 0.5*pu.cc*np.sqrt(1)*(abs(e_field)**2).sum(axis=0)[:,:,0] #  TODO: insert effective refractive index here
+        intensity = (abs(e_field)**2).sum(axis=0)[:,:,0] #  TODO: insert effective refractive index here
         
         if plot:
             plt.imshow(intensity,
