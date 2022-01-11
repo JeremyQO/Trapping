@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import nanotrappy.utils.physicalunits as pu
-import ffd_mode_solver_2 as ffd 
+import ffd_mode_solver as ffd 
 
 
 class datastruct:

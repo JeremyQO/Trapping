@@ -18,7 +18,7 @@ import warnings
 import scipy.optimize as so
 from scipy.signal import argrelextrema
 import matplotlib.patches as mpl_patches
-import ffd_mode_solver_2 as ffd 
+import ffd_mode_solver as ffd 
 from data_structures import emepy_data, comsol_data
 
 
