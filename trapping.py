@@ -57,7 +57,9 @@ class trap:
     def get_potential2d(self, power_b=40e-3, power_r=5e-3, mF = 0, remove_center=False, includeVdW=True):
         pot = power_b*self.potentials[0,:,:,mF+2]+power_r*self.potentials[1,:,:,mF+2]#+power_b/2*self.potentials[2,:,:,mF+2]
         if includeVdW:
-            pot+=self.Simul.CP
+            cp = self.Simul.CP
+            # cp[cp<-1e6]=0
+            pot+=cp
         x = self.Simul.x
         y = self.Simul.y
         width = self.red.width
@@ -69,17 +71,17 @@ class trap:
                         pot[i,j]=0
         return pot
 
-
-    def plot_potential2d(self, power_b=1, power_r=1, mF = 0, remove_center=True, cmap='jet_r', includeVdW=True):
+    def plot_potential2d(self, power_b=5e-2, power_r=6.57e-3, mF = 0, remove_center=True, cmap='jet_r', includeVdW=True):
         potential = self.get_potential2d(power_b, power_r, mF, remove_center=remove_center, includeVdW=includeVdW)
         if remove_center:
             depth = -self.get_trap_depht_and_position(power_b, power_r)[0][mF+2]
+            # depth = 1.02
             potential[abs(potential)>depth*1.02]=0
             potential[potential>0.001]=0
         x = np.real(self.Simul.x)
         y = np.real(self.Simul.y)
         plt.clf()
-        plt.imshow(potential, 
+        im = plt.imshow(potential, 
                    origin='lower', 
                    extent=[y.min(),y.max(),x.min(),x.max()], 
                    cmap=cmap
@@ -89,9 +91,8 @@ class trap:
                     self.eigen_r, self.red.wavelength*1e9, power_r*1e3))
         plt.xlabel("$x$ (m)")
         plt.ylabel("$y$ (m)")
-        plt.colorbar()
+        plt.colorbar(im ,fraction=0.046, pad=0.04)
         plt.tight_layout()
-        
         
     def get_potential1d(self, power_b=40e-3, power_r=6e-3, n_col=-1, includeVdW=True):
         n_col = int(len(self.Simul.y)/2) if n_col==-1 else n_col
@@ -101,10 +102,12 @@ class trap:
             potential = power_b*self.potentials[0,:,:,i+2]+power_r*self.potentials[1,:,:,i+2]
             potentials1d.append(potential[:,n_col][truth])
         if includeVdW:
-            potentials1d = [el+self.Simul.CP[:,n_col][truth] for el in potentials1d]
+            cp = self.Simul.CP[:,n_col][truth]
+            # cp[cp<-1e6]=0
+            potentials1d = [el+cp for el in potentials1d]
         return self.Simul.x[truth], potentials1d
 
-    def plot_potential1d(self, power_b=40e-3, power_r=6e-3, includeVdW=True):  # TODO: currently only for mF=2, make more general
+    def plot_potential1d(self, power_b=50e-3, power_r=6e-3, includeVdW=True):  # TODO: currently only for mF=2, make more general
        plt.clf()
        t, potentials = self.get_potential1d(power_b, power_r, includeVdW=includeVdW)
        # for i, pot in enumerate(potentials):
@@ -122,11 +125,13 @@ class trap:
            t = t[:80]
            potentials = [el[:80] for el in potentials]
            # vmax = argrelextrema(potentials[0], np.greater)[0]
-           vmin = argrelextrema(potentials[0], np.less)[0]
+           vmin = argrelextrema(potentials[0], np.less)[0][-1]
            position = t[vmin]
            plt.plot((position-self.red.height/2)*1e9, potentials[0][vmin], 'xr')
            # plt.xlabel("Distance from surface (nm)\n\n\nTrap depth %.0f uK\nTrap position %.0f nm"%(-depth*1e3, (position-self.red.height/2)*1e9))#, xy, args, kwargs)
-           ax.set_ylim([potentials[0][vmin]*1.05, 50e-3])
+           minn = potentials[0][vmin]
+           mminn = minn if minn >-100 else -30
+           ax.set_ylim([mminn*1.05, 50e-3])
            ax.set_xlim([0, 500])
            # create a list with two empty handles (or more if needed)
            handles = [mpl_patches.Rectangle((0, 0), 1, 1, fc="white", ec="white", lw=0, alpha=0)] * 2
@@ -147,7 +152,7 @@ class trap:
         return res
         
     def optimize_powers(self, max_pr=10e-3, n_points=100, plot=True):
-        pr0=5e-3 
+        pr0=3e-3 
         pb0=40.1e-3
         blue_powers=np.array([])
         red_powers = np.linspace(pr0,max_pr, n_points)
@@ -161,9 +166,11 @@ class trap:
         
         if plot:
             plt.clf()
-            plt.plot(red_powers*1e3, -depths)
-            plt.xlabel("Power in red detuned beam (mW)\n\nFor each point, the blue detuned beam is optimized\n in order to obtain maximum trap depth")
+            plt.plot(blue_powers*1e3, -depths,'blue', label="blue")
+            plt.plot(red_powers*1e3, -depths,'red', label="red")
+            plt.xlabel("Power in dipole beams (mW)\n\nFor each point, the blue detuned beam is optimized\n in order to obtain maximum trap depth")
             plt.ylabel("Trap depth (mK)")
+            plt.legend()
             plt.title("")
             plt.tight_layout()
         return blue_powers, red_powers, depths
@@ -178,6 +185,7 @@ class trap:
         b0 = b[z]+mb*(d[z]+1)
         if plot:
             plt.plot(r0*1e3, 1,"xr")
+            plt.plot(b0*1e3, 1,"xb")
         return b0[0], r0[0]
 
     def get_trap_depht_and_position(self, power_b, power_r, includeVdW=True, for_minimization=False):  
@@ -189,9 +197,9 @@ class trap:
         depths = []
         positions = []
         for i in range(len(vmax)):
-            if len(vmax[i])==1 and len(vmin[i])==1:
-                depths.append(-min(potentials[i][vmax[i]], 0) + potentials[i][vmin[i]])
-                positions.append(np.real(t[vmin[i]]))
+            if len(vmax[i])==1 and len(vmin[i])>=1:
+                depths.append(-min(potentials[i][vmax[i]], 0) + potentials[i][vmin[i][-1]])
+                positions.append(np.real(t[vmin[i][-1]]))
             elif for_minimization:
                 depths.append(0)   
                 positions.append(0)
@@ -232,28 +240,113 @@ class trap:
         return depths, positions, x, y        
 
 
+
 if __name__=="__main__":
     data_folder = os.path.join(os.getcwd(), "datafolder")
+    data_folder = os.path.join(os.getcwd(), "datafolder/690-850")
     height = 150e-9
     width = 1e-6
     aoi = [-width/2, height/2+500e-9, width/2, height/2]
-    o_red =  emepy_data(data_folder, height, width, 850e-9, 500, aoi, [], [], 2)
-    o_blue = emepy_data(data_folder, height, width, 690e-9, 500, aoi, [], [], 2)
     
-    # o_red = comsol_data(data_folder+"/H_150_W_1000_860.csv")
-    # o_blue = comsol_data(data_folder+"/H_150_W_1000_700.csv")
-    t = trap(o_blue, o_red, 0,0)
-    t.red.plot_intensity(0)
-    plt.figure()
-    t.blue.plot_intensity(0)
-    # t.plot_potential1d(47e-3,6e-3)
+    o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
+    o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    t = trap(o_blue, o_red, 1,1)
+    # b,r = t.get_powers_one_mK()
+    # t.plot_potential1d(b,r)    
+    # t.plot_potential2d(b,r)
+    d,p,x,y = t.map_trap_depth_pos(1000, plot=True)
+    
+    # t.plot_potential1d(50e-3,0.2e-3)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+    # o_red2 = comsol_data(data_folder2+"/H_150_W_1000_850.csv", aoi=aoi)
+    # e1r = np.real(o_red.efields[0][4][0,:,:,0])
+    # e2r = np.real(o_red.efields[0][4][1,:,:,0])
+    # e3r = np.imag(o_red.efields[0][4][2,:,:,0])
+    # x = np.real(o_red.efields[0][1])
+    # y = np.real(o_red.efields[0][2])
+    # from scipy import interpolate
+    # f1r = interpolate.interp2d(x, y, e1r, kind='linear', fill_value=0)
+    # f2r = interpolate.interp2d(x, y, e2r, kind='linear', fill_value=0)
+    # f3r = interpolate.interp2d(x, y, e3r, kind='linear', fill_value=0)
+
+        
+    # e1r2 = np.real(o_red2.efields[0][4][0,:,:,0])
+    # e2r2 = np.real(o_red2.efields[0][4][1,:,:,0])
+    # e3r2 = np.imag(o_red2.efields[0][4][2,:,:,0])
+    # x2 = np.real(o_red2.efields[0][1])
+    # y2 = np.real(o_red2.efields[0][2])
+    
+    # e1r1 = f1r(x2,y2)
+    # e2r1 = f2r(x2,y2)
+    # e3r1 = f3r(x2,y2)
+    # e1r1[np.isnan(e1r1)]=0
+    # e2r1[np.isnan(e2r1)]=0
+    # e3r1[np.isnan(e3r1)]=0
+    
+    
+    # aoi = []
+    # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+    # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+
+    # o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
+    # o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    # t = trap(o_blue, o_red, 0, 0)
+    # b,r = (0.049311874391455214, 0.006579567451118707*0)
+    # o_blue.plot_intensity(0)
+    # print(o_blue.efields[0][4].shape)
+    # t.red.plot_intensity(1)
+    # plt.figure()
+    # t.blue.plot_intensity(1)
+    # t.plot_potential1d(40e-3,3e-3)
     # d,p, xx,yy = t.map_trap_depth_pos(plot=True)
     # b,r = t.get_powers_one_mK()
-    # t.plot_potential2d(b,r)    
+    # plt.figure()
+    # b=0.0542630823379978
+    # r = 0.0055024679348216025
+    # t.plot_potential1d(b,r)
+    # t.plot_potential2d(0,r, includeVdW=False, remove_center=False)
+
+    # t.plot_potential2d(75e-3,7e-3, includeVdW=True, remove_center=True)    
+    # t.get_trap_depht_and_position(65e-3,7e-3)
     
     
     
     
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # files = ["H_150_W_1000_6900_eigen1_1000c.npz","H_150_W_1000_6900_eigen2_1000c.npz",
+    #           "H_150_W_1000_8500_eigen1_1000c.npz", "H_150_W_1000_8500_eigen2_1000c.npz"]
+    # files = ["H_150_W_1000_8500_eigen2_1000c.npz"]
+    # data_folder = os.path.join(os.getcwd(), "datafolder")
+    # fs = np.array([os.path.join(data_folder, f) for f in files])
+    # for i in range(1):
+    #     d = np.load(fs[i], allow_pickle=True)
+    #     neff = d['neff']
+    #     fa = d['formatted_array']
+    #     mu0 = 4*np.pi*1e-7
+    #     c = 299792458    
+    #     fa4 = fa[4]* np.sqrt(mu0 * c)
+    #     fa[4]=fa4
+    #     print(fs[i].replace("c","").replace(".npz",""))
+    #     np.savez_compressed(fs[i].replace("c.npz",""), formatted_array=fa, neff=neff)
+
     
     
     

@@ -67,16 +67,16 @@ class datastruct:
         x = dat[1]
         y = dat[2]
         e_field = dat[4]
-        # intensity = np.zeros((len(x), len(y)))
         # intensity = 0.5*pu.cc*np.sqrt(1)*(abs(e_field)**2).sum(axis=0)[:,:,0] #  TODO: insert effective refractive index here
         intensity = (abs(e_field)**2).sum(axis=0)[:,:,0] #  TODO: insert effective refractive index here
         
         if plot:
-            plt.imshow(intensity,
-                        origin='lower', 
-                        extent=[x.min()*1e9, x.max()*1e9, y.min()*1e9, y.max()*1e9], 
-                        cmap=cmap
-                        )
+            plt.clf()
+            plt.imshow(intensity, 
+                       origin='lower', 
+                       extent=[x.min()*1e9, x.max()*1e9, y.min()*1e9, y.max()*1e9], 
+                       cmap=cmap
+                       )
             # plt.xlabel("x (nm)")
             # plt.ylabel("y (nm)")
             plt.title("Intensity of eigenmode %i at $\\lambda=%i$ nm\nHeight=%i nm, Width=%i nm"
@@ -87,8 +87,9 @@ class datastruct:
     
     
 class comsol_data(datastruct):
-    def __init__(self, filename, n_eigenfrequencies=2):
+    def __init__(self, filename, n_eigenfrequencies=2, aoi=[]):
         super().__init__()
+        self.aoi = aoi
         self.convert = np.vectorize(self.convert_s)
         
         self.filename = filename
@@ -151,6 +152,28 @@ class comsol_data(datastruct):
         E_field_normalized = E_field/np.sqrt(power)
         E_field_normalizedT = E_field_normalized.transpose(0,2,1,3)
         formated_array = np.array([self.wavelength, x,y,z, E_field_normalizedT], dtype=object)
+        if self.aoi!=[]:
+            ef = formated_array
+            x = ef[1] 
+            y = ef[2]
+            z = ef[3]
+            e = ef[4]
+            ex = e[0]
+            ey = e[1]
+            ez = e[2] 
+            if self.aoi != []:
+                xtruth = (x>=self.aoi[0]) * (x<=self.aoi[2])
+                ytruth = (y<=self.aoi[1]) * (y>=self.aoi[3])
+            else:
+                xtruth = (x==x)
+                ytruth = (y==y)
+            xnew = x[xtruth]
+            ynew = y[ytruth] 
+            exnew = np.array([line[xtruth] for line in ex[ytruth]])#.transpose(1,0,2)
+            eynew = np.array([line[xtruth] for line in ey[ytruth]])#.transpose(1,0,2)
+            eznew = np.array([line[xtruth] for line in ez[ytruth]])#.transpose(1,0,2)
+            efields_restricted=np.array([ef[0], xnew, ynew, z, np.array([exnew, eynew, eznew])], dtype=object)
+            return efields_restricted
         return formated_array
 
     
@@ -217,13 +240,17 @@ if __name__=="__main__":
     # o = comsol_data(data_folder+"/H_150_W_1000_7000.csv")
     height = 150e-9
     width = 1e-6
-    aoi = [-width/2, height/2+250e-9, width/2, height/2]
+    # aoi = [-width/2, height/2+250e-9, width/2, height/2]
+    aoi = []
     # aoi=[]
-    o_red = emepy_data(data_folder, height, width, 850e-9, 1000, aoi, 2)
-    o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, 2)
+    # o_red = emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+    # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
     # o_blue.export_to_eigenfolders("blue")
     # plt.figure()
-    o_red.plot_intensity(0)
+    # o_red.plot_intensity(1)
+    # o_blue.plot_intensity(0)
+    # plt.figure()
+    # o_blue.simu.plot_field(1)
     # print(o.filename)
     
     

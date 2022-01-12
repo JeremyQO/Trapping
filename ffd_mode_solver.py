@@ -263,7 +263,7 @@ class simulation:
         height = self.height
         x = self.x
         y = self.y 
-        i = self.get_intensity(n_mode).T[0] 
+        i = self.get_intensity(n_mode)
         plt.plot([-width/2, width/2, width/2, -width/2,-width/2], 
                   [-height/2, -height/2, height/2, height/2,-height/2],'white')
         plt.imshow(i,
