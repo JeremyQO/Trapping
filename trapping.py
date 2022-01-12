@@ -211,8 +211,8 @@ class trap:
     def map_trap_depth_pos(self, length = 100, mF=0, plot=False):
         depths = np.zeros((length,length))
         positions = np.zeros((length,length))
-        x = np.linspace(0, 50e-3,length, endpoint=True)
-        y = np.linspace(0, 6e-3,length, endpoint=True)
+        x = np.linspace(0, 60e-3,length, endpoint=True)
+        y = np.linspace(0, 7.5e-3,length, endpoint=True)
         for i in range(length):
             for j in range(length):
                 depth, position = self.get_trap_depht_and_position(x[i],y[j])
@@ -227,6 +227,7 @@ class trap:
             plt.title("Trap depth (mK)")
             plt.xlabel("Red detuned light power (mW)")
             plt.ylabel("Blue detuned light power (mW)")
+            plt.tight_layout()
             plt.figure()
             plt.imshow(positions,
                        extent=np.array([y.min(),y.max(),x.min(),x.max()])*1000,
@@ -237,8 +238,30 @@ class trap:
             plt.title("Trap position (nm)")
             plt.xlabel("Red detuned light power (mW)")
             plt.ylabel("Blue detuned light power (mW)")
+            plt.tight_layout()
         return depths, positions, x, y        
 
+
+    def get_trap_frequency(self, power_b=55e-3, power_r=5.5e-3, n_line=-1, plot=False):  # TODO: make this work
+        n_line = int(len(self.Simul.y)/2) if n_line==-1 else n_line
+        t, pots = self.potential1d(power_b, power_r, n_line)
+        if np.argmin(pots[0])==0 or np.argmin(pots[0])==len(t)-1:
+            print('No trap minima exists')
+            return -1e30
+        tmin = t[np.argmin(pots[0])]
+        pots = [pot[12:40] for pot in pots]
+        # t = t[12:40]-3.25e-7
+        t = t[12:40] - tmin
+        res =  np.polyfit(t, pots[0], deg=9)
+        p = np.poly1d(res)
+
+        # p2 = np.poly1d(res[-2:])
+        if plot:
+            plt.clf()
+            plt.plot(t, pots[0],'.')
+            plt.plot(t, p(t))
+            plt.plot(t, res[-1]+res[-3]*t**2+res[-2]*t)
+        return res[-3]
 
 
 if __name__=="__main__":
@@ -251,21 +274,65 @@ if __name__=="__main__":
     o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
     o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
     t = trap(o_blue, o_red, 1,1)
-    # b,r = t.get_powers_one_mK()
-    # t.plot_potential1d(b,r)    
+    b,r = t.get_powers_one_mK(plot=False)
+    plt.figure()
+    t.plot_potential1d(b,5.4e-3)    
     # t.plot_potential2d(b,r)
     d,p,x,y = t.map_trap_depth_pos(1000, plot=True)
-    
+    # string = "Height = 150nm. Width = 1000 nm. LOCAs. Blue wavelength = 690 nm. Red wavelength = 850 nm. Rubidium 87 in F=2. Atom trapped bove the waveguide. Powers are expressed in watts "
+    # np.savez_compressed('depth_pos', depth=d, position=p, blue_power=x, red_power=y, readme=string)
     # t.plot_potential1d(50e-3,0.2e-3)
+    # from scipy import interpolate
+    # depth = interpolate.interp2d(x, y, d, kind='linear', fill_value=0)
+    # pos = interpolate.interp2d(x, y, p, kind='linear', fill_value=0)
+    # xx = np.linspace(x[0], x[-1],2000)
+    # yy = np.linspace(y[0], y[-1], 2000)
+    # dd = depth(xx,yy)    
+    # pp = pos(xx,yy)
+    # plt.imshow(pp)    
+    # plt.imshow(dd)    
+    # plt.figure()
+    # plt.clf()
+    # # plt.plot(y*1e3,d[917], label='Constant Blue')
+    # plt.plot(y*1e3,d[917], label='Constant Blue')
+    # plt.xlabel("Power of red detuned laser (mW)", )
+    # plt.ylabel("Trap depth (mK)", )
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.figure()
+    # plt.plot(y[:-1]*1e3, np.diff(d[917])/np.diff(y*1e3))
+    # plt.plot(x[:-1]*1e3, np.diff(d[:,745])/np.diff(x*1e3))
+    plt.figure()
+    plt.clf()
+    plt.plot(y*1e3,(p[917]-75e-9)*1e9, label='Constant Blue')
+    plt.xlabel("Power of red detuned laser (mW)", )
+    plt.ylabel("Trap position (nm)", )
+    plt.legend()
+    plt.tight_layout()
     
     
+    plt.figure()
+    plt.clf()
+    plt.plot(x*1e3,(p[:,745]-75e-9)*1e9, label='Constant Red')
+    plt.title("Distance between minima of trap and waveguide surface")
+    plt.xlabel("Power of blue detuned laser (mW)", )
+    plt.ylabel("Trap position (nm)", )
+    plt.legend()
+    plt.tight_layout()
     
     
+    yy = (p[:,745]-75e-9)*1e9
+    xx = x*1e3
+    print(30/(57-49.5))
     
+    # plt.figure()
+    # plt.clf()
+    # plt.plot(x[:-1]*1e3,np.diff(p[:,745]*1e9)/np.diff(x*1e3), label='Constant Red')
+    # plt.xlabel("Power of blue detuned laser (mW)", )
+    # plt.legend()
+    # plt.tight_layout()
     
-    
-    
-    
+    np.diff(p[:,745]*1e9)/np.diff(x*1e3)
     
     # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
     # o_red2 = comsol_data(data_folder2+"/H_150_W_1000_850.csv", aoi=aoi)
