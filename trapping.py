@@ -212,7 +212,7 @@ class trap:
         depths = np.zeros((length,length))
         positions = np.zeros((length,length))
         x = np.linspace(0, 50e-3,length, endpoint=True)
-        y = np.linspace(0, 15e-3,length, endpoint=True)
+        y = np.linspace(0, 6e-3,length, endpoint=True)
         for i in range(length):
             for j in range(length):
                 depth, position = self.get_trap_depht_and_position(x[i],y[j])
