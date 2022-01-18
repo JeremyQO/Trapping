@@ -271,14 +271,16 @@ if __name__=="__main__":
     width = 1e-6
     aoi = [-width/2, height/2+500e-9, width/2, height/2]
     
-    o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
-    o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    # o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
+    # o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+    o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
     t = trap(o_blue, o_red, 1,1)
-    b,r = t.get_powers_one_mK(plot=False)
-    plt.figure()
-    t.plot_potential1d(b,5.4e-3)    
+    # b,r = t.get_powers_one_mK(plot=False)
+    # plt.figure()
+    # t.plot_potential1d(b,5.4e-3)    
     # t.plot_potential2d(b,r)
-    d,p,x,y = t.map_trap_depth_pos(1000, plot=True)
+    # d,p,x,y = t.map_trap_depth_pos(1000, plot=True)
     # string = "Height = 150nm. Width = 1000 nm. LOCAs. Blue wavelength = 690 nm. Red wavelength = 850 nm. Rubidium 87 in F=2. Atom trapped bove the waveguide. Powers are expressed in watts "
     # np.savez_compressed('depth_pos', depth=d, position=p, blue_power=x, red_power=y, readme=string)
     # t.plot_potential1d(50e-3,0.2e-3)
@@ -302,37 +304,37 @@ if __name__=="__main__":
     # plt.figure()
     # plt.plot(y[:-1]*1e3, np.diff(d[917])/np.diff(y*1e3))
     # plt.plot(x[:-1]*1e3, np.diff(d[:,745])/np.diff(x*1e3))
-    plt.figure()
-    plt.clf()
-    plt.plot(y*1e3,(p[917]-75e-9)*1e9, label='Constant Blue')
-    plt.xlabel("Power of red detuned laser (mW)", )
-    plt.ylabel("Trap position (nm)", )
-    plt.legend()
-    plt.tight_layout()
-    
-    
-    plt.figure()
-    plt.clf()
-    plt.plot(x*1e3,(p[:,745]-75e-9)*1e9, label='Constant Red')
-    plt.title("Distance between minima of trap and waveguide surface")
-    plt.xlabel("Power of blue detuned laser (mW)", )
-    plt.ylabel("Trap position (nm)", )
-    plt.legend()
-    plt.tight_layout()
-    
-    
-    yy = (p[:,745]-75e-9)*1e9
-    xx = x*1e3
-    print(30/(57-49.5))
-    
     # plt.figure()
     # plt.clf()
-    # plt.plot(x[:-1]*1e3,np.diff(p[:,745]*1e9)/np.diff(x*1e3), label='Constant Red')
-    # plt.xlabel("Power of blue detuned laser (mW)", )
+    # plt.plot(y*1e3,(p[917]-75e-9)*1e9, label='Constant Blue')
+    # plt.xlabel("Power of red detuned laser (mW)", )
+    # plt.ylabel("Trap position (nm)", )
     # plt.legend()
     # plt.tight_layout()
     
-    np.diff(p[:,745]*1e9)/np.diff(x*1e3)
+    
+    # plt.figure()
+    # plt.clf()
+    # plt.plot(x*1e3,(p[:,745]-75e-9)*1e9, label='Constant Red')
+    # plt.title("Distance between minima of trap and waveguide surface")
+    # plt.xlabel("Power of blue detuned laser (mW)", )
+    # plt.ylabel("Trap position (nm)", )
+    # plt.legend()
+    # plt.tight_layout()
+    
+    
+    # yy = (p[:,745]-75e-9)*1e9
+    # xx = x*1e3
+    # print(30/(57-49.5))
+    
+    # # plt.figure()
+    # # plt.clf()
+    # # plt.plot(x[:-1]*1e3,np.diff(p[:,745]*1e9)/np.diff(x*1e3), label='Constant Red')
+    # # plt.xlabel("Power of blue detuned laser (mW)", )
+    # # plt.legend()
+    # # plt.tight_layout()
+    
+    # np.diff(p[:,745]*1e9)/np.diff(x*1e3)
     
     # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
     # o_red2 = comsol_data(data_folder2+"/H_150_W_1000_850.csv", aoi=aoi)
