@@ -17,6 +17,8 @@ import scipy.optimize as so
 from scipy.signal import argrelextrema
 import matplotlib.patches as mpl_patches
 from data_structures import emepy_data, comsol_data
+import scipy.constants as sc
+
 
 
 class trap:
@@ -174,19 +176,7 @@ class trap:
             plt.title("")
             plt.tight_layout()
         return blue_powers, red_powers, depths
-    
-    def get_powers_one_mK(self, max_pr=10e-3, n_points=100, plot=True):
-        b, r, d = self.optimize_powers(max_pr=max_pr, n_points=n_points, plot=plot)
-        zero_crossings = np.where(np.diff(np.signbit(d+1)))[0]
-        z = zero_crossings
-        mr = (r[z+1]-r[z])/(d[z+1]-d[z])
-        mb = (b[z+1]-b[z])/(d[z+1]-d[z])
-        r0 = r[z]+mr*(d[z]+1)
-        b0 = b[z]+mb*(d[z]+1)
-        if plot:
-            plt.plot(r0*1e3, 1,"xr")
-            plt.plot(b0*1e3, 1,"xb")
-        return b0[0], r0[0]
+
 
     def get_trap_depht_and_position(self, power_b, power_r, includeVdW=True, for_minimization=False):  
         t, potentials = self.get_potential1d(power_b, power_r, includeVdW=includeVdW)
@@ -241,42 +231,180 @@ class trap:
             plt.tight_layout()
         return depths, positions, x, y        
 
-
-    def get_trap_frequency(self, power_b=55e-3, power_r=5.5e-3, n_line=-1, plot=False):  # TODO: make this work
+    def get_trap_frequency(self, power_b=55e-3, power_r=5.5e-3, n_line=-1, plot=False): 
         n_line = int(len(self.Simul.y)/2) if n_line==-1 else n_line
-        t, pots = self.potential1d(power_b, power_r, n_line)
-        if np.argmin(pots[0])==0 or np.argmin(pots[0])==len(t)-1:
+        t, pots = self.get_potential1d(power_b, power_r, n_line)
+        depths, poss = self.get_trap_depht_and_position(power_b, power_r)
+        # np.savez_compressed('trap', t=t, pots=pots, depths=depths, poss=poss, dtype=object)
+        pots= np.array(pots)*1e-3*sc.k  # conversion to Joules
+        if all(p==0 for p in poss) or all(d==0 for d in depths):
             print('No trap minima exists')
             return -1e30
-        tmin = t[np.argmin(pots[0])]
-        pots = [pot[12:40] for pot in pots]
-        # t = t[12:40]-3.25e-7
-        t = t[12:40] - tmin
-        res =  np.polyfit(t, pots[0], deg=9)
-        p = np.poly1d(res)
+        
+        pmax = [argrelextrema(pot, np.greater)[0] for pot in pots]
+        tmax = [t[p] for p in pmax]
+        pmin = [argrelextrema(pot, np.less)[0] for pot in pots]
+        tmin = [t[p] for p in pmin]
+
+
+        int_a = [p[0]+2 for p in pmax]
+        int_b = [int(-(len(t)-p[0])//1.3) for p in pmin]
+
+        pots_r = [pot[int_a[i]: int_b[i]] for i,pot in enumerate(pots)]
+        t_r = [t[int_a[i]:int_b[i]] - tmin[i] for i in range(len(int_a))]
+
+
+        order = 6
+        res =  np.array([np.polyfit(t_r[i], pots_r[i], deg=order) for i in range(len(t_r))])
+        p = [np.poly1d(r) for r in res]
 
         # p2 = np.poly1d(res[-2:])
+
+
+        # plt.clf()
+        # start = pmax[2][0]
+        # plt.plot(t[start:], pots[2][start:],'.')
+        # plt.plot(t[start:], p[2](t[start:]-tmin[2]))
+        # plt.plot(t[start:], res[2][-1]+res[2][-3]*(t[start:]-tmin[2])**2+res[2][-2]*(t[start:]-tmin[2]))
+        ret = np.real(res[:,-3])
+        m_Rb = 86.909184*sc.atomic_mass
+        freq = np.sqrt(ret*2/m_Rb)/2/sc.pi
         if plot:
             plt.clf()
-            plt.plot(t, pots[0],'.')
-            plt.plot(t, p(t))
-            plt.plot(t, res[-1]+res[-3]*t**2+res[-2]*t)
-        return res[-3]
+            plt.plot(t_r[2], pots_r[2],'.', label="Simulation")
+            plt.plot(t_r[2], p[2](t_r[2]), label="Polynomial fit, order %i"%(order))
+            plt.plot(t_r[2], res[2][-1]+res[2][-3]*(t_r[2])**2+res[2][-2]*(t_r[2]),label="Harmonic part")
+            plt.legend()
+            plt.title("Trap frequency along $x$\n $f_\\mathrm{trap}=\\dfrac{1}{2\\pi}\\sqrt{\\dfrac{2a}{m_{Rb}}}=%.2f$ MHz\n"%(freq[2]*1e-6))
+            plt.xlabel("Position (m)")
+            plt.ylabel("Potential (J)")
+            plt.tight_layout()
+        return freq
 
+    def get_trap_frequency_H(self, power_b=55e-3, power_r=5.5e-3, plot=False): 
+        t, pots = self.get_potential1d_H(power_b, power_r)
+        pots= np.array(pots)*1e-3*sc.k  # conversion to Joules
 
+        int_a = len(t)//5
+        int_b = -len(t)//5
+
+        pots_r = [pot[int_a:int_b] for pot in pots]
+        t_r = t[int_a:int_b]
+
+        order = 6
+        res =  np.array([np.polyfit(t_r, pp, deg=order) for pp in pots_r])
+        p = [np.poly1d(r) for r in res]
+
+        ret = np.real(res[:,-3])
+        m_Rb = 86.909184*sc.atomic_mass
+        freq = np.sqrt(ret*2/m_Rb)/2/sc.pi
+        if plot:
+            plt.clf()
+            plt.plot(t_r, pots_r[2],'.', label="Simulation")
+            plt.plot(t_r, p[2](t_r), label="Polynomial fit, order %i"%(order))
+            plt.plot(t_r, res[2][-1]+res[2][-3]*(t_r)**2+res[2][-2]*(t_r),label="Harmonic part")
+            plt.legend()
+            plt.title("Trap frequency along $y$\n $f_\\mathrm{trap}=\\dfrac{1}{2\\pi}\\sqrt{\\dfrac{2a}{m_{Rb}}}=%.2f$ MHz\n"%(freq[2]*1e-6))
+            plt.xlabel("Position (m)")
+            plt.ylabel("Potential (J)")
+            plt.tight_layout()
+        return freq
+
+    def get_potential1d_H(self, power_b=40e-3, power_r=6e-3, n_line=-1, includeVdW=True):  
+        depths, poss = self.get_trap_depht_and_position(power_b, power_r)
+        # t, pots = self.get_potential1d(power_b, power_r, int(len(self.Simul.y)/2))
+        position_min = int(poss[2]*1e9)
+        x = np.array([int(np.real(el*1e9)) for el in self.Simul.x])
+        n_line = list(x).index(position_min) if n_line==-1 else n_line
+        potentials1d = []
+        for i in range(-2,2+1):
+            potential = power_b*self.potentials[0,:,:,i+2]+power_r*self.potentials[1,:,:,i+2]
+            potentials1d.append(potential[n_line])
+        if includeVdW:
+            cp = self.Simul.CP[n_line]
+            # cp[cp<-1e6]=0
+            potentials1d = [el+cp for el in potentials1d]
+        return self.Simul.y, potentials1d
+
+    def plot_potential1d_H(self, power_b=50e-3, power_r=6e-3, includeVdW=True):  # TODO: currently only for mF=2, make more general
+       plt.clf()
+       t, potentials = self.get_potential1d_H(power_b, power_r, includeVdW=includeVdW)
+       # for i, pot in enumerate(potentials):
+       # print(t)
+       pot = potentials[2]
+       plt.plot(t*1e9, pot)# , label="$m_f=%i$"%(i-2))
+       plt.title("Eigenmode %i at $\\lambda=%i$ nm, P=%.1f mW\n Eigenmode %i at $\\lambda=%i$ nm, P=%.1f mW"
+                 %(self.eigen_b, self.blue.wavelength*1e9,power_b*1e3, self.eigen_r, self.red.wavelength*1e9,power_r*1e3))
+       plt.xlabel("Lateral distance (nm)")
+       plt.ylabel("Potential (mK)")
+       plt.tight_layout()
+
+    def get_trap_frequency_L(self, power_b, power_r, plot=False):  # TODO: add mF dependence
+        depths, poss = self.get_trap_depht_and_position(power_b, power_r)
+        position_min = int(poss[2]*1e9)
+        x = np.array([int(np.real(el*1e9)) for el in self.Simul.x])
+        n_line = list(x).index(position_min)
+        n_col= len(self.Simul.y)//2
+        potential = power_b*self.potentials[0,:,:,2]+power_r*self.potentials[1,:,:,2]
+        
+        pot_min = potential[n_line, n_col]+self.Simul.CP[n_line, n_col]
+        beta = self.red.neffs[self.eigen_r] * 2*sc.pi/self.red.wavelength
+        
+        z = np.linspace(-self.red.wavelength/20, self.red.wavelength/20, 300)
+        pot =  np.cos(beta*z)**2*pot_min *1e-3*sc.k
+        order = 6
+        res =  np.polyfit(z, pot, deg=order) 
+        p = np.poly1d(res)
+
+        ret = np.real(res[-3])
+        m_Rb = 86.909184*sc.atomic_mass
+        freq = np.sqrt(ret*2/m_Rb)/2/sc.pi
+        if plot:
+            plt.clf()
+            # plt.plot(z, pot,'.', label="Simulation")
+            zz = np.linspace(-self.red.wavelength/4, self.red.wavelength/4, 200)
+            plt.plot(zz, np.cos(beta*zz)**2*pot_min *1e-3*sc.k, label="Simulation")
+            plt.plot(zz, p(zz), label="Polynomial fit, order %i"%(order))
+            plt.plot(zz, res[-1]+res[-3]*(zz)**2+res[-2]*(zz),label="Harmonic part")
+            plt.legend()
+            plt.title("Trap frequency along $z$\n $f_\\mathrm{trap}=\\dfrac{1}{2\\pi}\\sqrt{\\dfrac{2a}{m_{Rb}}}=%.2f$ MHz\n"%(freq*1e-6))
+            plt.xlabel("Position (m)")
+            plt.ylabel("Potential (J)")
+            plt.tight_layout()
+        return [freq]*len(depths)
+        
+    def get_powers_for_mK(self, mK = -1, max_pr=20e-3, n_points=100, plot=True):
+        b, r, d = self.optimize_powers(max_pr=max_pr, n_points=n_points, plot=plot)
+        zero_crossings = np.where(np.diff(np.signbit(d-mK)))[0]
+        z = zero_crossings
+        mr = (r[z-mK]-r[z])/(d[z-mK]-d[z])
+        mb = (b[z-mK]-b[z])/(d[z-mK]-d[z])
+        r0 = r[z]+mr*(d[z]-mK)
+        b0 = b[z]+mb*(d[z]-mK)
+        if plot:
+            plt.plot(r0*1e3, -mK,"xr")
+            plt.plot(b0*1e3, -mK,"xb")
+        return b0[0], r0[0]
+        
+        
 if __name__=="__main__":
-    data_folder = os.path.join(os.getcwd(), "datafolder")
+    # data_folder = os.path.join(os.getcwd(), "datafolder")
     data_folder = os.path.join(os.getcwd(), "datafolder/690-850")
     height = 150e-9
     width = 1e-6
     aoi = [-width/2, height/2+500e-9, width/2, height/2]
     
-    # o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
-    # o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
-    o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
-    o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+    o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
+    o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+    # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
     t = trap(o_blue, o_red, 1,1)
-    # b,r = t.get_powers_one_mK(plot=False)
+    b,r = t.get_powers_for_mK(mK=-1, max_pr=20e-3, plot=True)
+    t.plot_potential1d_H(b,r)
+    print(t.get_trap_frequency(b,r, plot=1))
+    # print(t.get_trap_frequency_H(b,r, plot=1))
+    # print(t.get_trap_frequency_L(b,r, plot=1))
+        # t.plot_potential1d(b,r)
     # plt.figure()
     # t.plot_potential1d(b,5.4e-3)    
     # t.plot_potential2d(b,r)

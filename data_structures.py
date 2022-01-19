@@ -98,7 +98,7 @@ class comsol_data(datastruct):
         self.width, self.height = self.get_waveguide_dimensions()
         # self.efield = [self.get_efield_from_csv(i) for i in range(n_eigenfrequencies)]   #TODO, this line instead of the next, in principle
         self.efields = [self.get_efield_from_csv(0), self.get_efield_from_csv(0)]
-
+        self.neffs = [self.get_neff_from_csv(0), self.get_neff_from_csv(0)]
         
         # TODO: add get_neff
         
@@ -119,6 +119,20 @@ class comsol_data(datastruct):
         height = n[0]
         width = n[1].split('_')[0]
         return float(width)*1e-9, float(height)*1e-9
+    
+    def get_neff_from_csv(self, eigenfrequency):
+        directory, filen = os.path.split(self.filename)
+        filen = filen.split("_")
+        newstring = "H_"+filen[1]+"_W_"+filen[3]+"_P.csv"
+        power_data = pd.read_csv(os.path.join(directory, newstring), header=4).to_numpy()
+        neff = 0
+        for line in power_data:
+            try:
+                np.testing.assert_approx_equal(line[0], self.wavelength, significant=3)
+                neff = line[1]
+            except AssertionError:
+                pass
+        return neff
     
     def get_efield_from_csv(self, eigenfrequency):
         df = pd.read_csv(self.filename, header=8)
