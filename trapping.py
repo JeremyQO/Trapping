@@ -18,6 +18,7 @@ from scipy.signal import argrelextrema
 import matplotlib.patches as mpl_patches
 from data_structures import emepy_data, comsol_data
 import scipy.constants as sc
+import scipy
 
 
 
@@ -371,7 +372,7 @@ class trap:
             plt.xlabel("Position (m)")
             plt.ylabel("Potential (J)")
             plt.tight_layout()
-        return [freq]*len(depths)
+        return np.array([freq]*len(depths))
         
     def get_powers_for_mK(self, mK = -1, max_pr=20e-3, n_points=100, plot=True):
         b, r, d = self.optimize_powers(max_pr=max_pr, n_points=n_points, plot=plot)
@@ -385,7 +386,30 @@ class trap:
             plt.plot(r0*1e3, -mK,"xr")
             plt.plot(b0*1e3, -mK,"xb")
         return b0[0], r0[0]
-        
+    
+    def wavefunction(self, power_b, power_r, plot=False):
+        wx = 2*sc.pi*self.get_trap_frequency(power_b, power_r)[2]
+        wy = 2*sc.pi*self.get_trap_frequency_H(power_b, power_r)[2]
+        wz = 2*sc.pi*self.get_trap_frequency_L(power_b, power_r)[2]
+        m_Rb = 86.909184*sc.atomic_mass
+        m = m_Rb
+        hbar = sc.hbar
+        x = np.linspace(-125e-9, 125e-9, 200)
+        y = np.linspace(-125e-9, 125e-9, 200)
+        z = np.linspace(-125e-9, 125e-9, 200)
+        n=0
+        wfx = scipy.special.hermite(n)(np.sqrt(m*wx/hbar)*x) *np.exp(-m*wx*x**2/2/hbar) *np.power(m*wx/sc.pi/hbar, 1/4) /np.sqrt(2**n*np.math.factorial(n))
+        wfy = scipy.special.hermite(n)(np.sqrt(m*wy/hbar)*y) *np.exp(-m*wy*x**2/2/hbar) *np.power(m*wy/sc.pi/hbar, 1/4) /np.sqrt(2**n*np.math.factorial(n))
+        wfz = scipy.special.hermite(n)(np.sqrt(m*wz/hbar)*z) *np.exp(-m*wz*x**2/2/hbar) *np.power(m*wz/sc.pi/hbar, 1/4) /np.sqrt(2**n*np.math.factorial(n))
+        plt.figure()
+        plt.plot(x*1e9, wfx, label="x")
+        plt.plot(y*1e9, wfy, label="y")
+        plt.plot(z*1e9, wfz, label="z")
+        plt.legend()
+        plt.title("Wavefunction of the atom in the ground state for trapping\n frequencies: $(\\omega_x, \\omega_y, \\omega_z) = (%.0f, %.0f, %.0f)$ kHz"%(wx*1e-3/2/sc.pi, wy*1e-3/2/sc.pi, wz*1e-3/2/sc.pi))
+        plt.xlabel("Position (nm)")
+        plt.ylabel("Wavefunction")
+        plt.tight_layout()
         
 if __name__=="__main__":
     # data_folder = os.path.join(os.getcwd(), "datafolder")
@@ -399,9 +423,10 @@ if __name__=="__main__":
     # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
     # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
     t = trap(o_blue, o_red, 1,1)
-    b,r = t.get_powers_for_mK(mK=-1, max_pr=20e-3, plot=True)
-    t.plot_potential1d_H(b,r)
-    print(t.get_trap_frequency(b,r, plot=1))
+    b,r = t.get_powers_for_mK(mK=-1, plot=False)
+    t.wavefunction(b, r) 
+    # t.plot_potential1d_H(b,r)
+    # print(t.get_trap_frequency(b,r, plot=1))
     # print(t.get_trap_frequency_H(b,r, plot=1))
     # print(t.get_trap_frequency_L(b,r, plot=1))
         # t.plot_potential1d(b,r)
