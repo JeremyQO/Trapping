@@ -62,7 +62,7 @@ class simulation:
         """
         xx, yy = np.meshgrid(x, y)
         n_vacuum = np.where(np.abs(xx.T)==np.abs(xx.T), 1, 0)
-        n_SiO2 = np.where(yy.T < -self.height/2+50e-9,  # added 50 nm of silica for the LOCAs geometry
+        n_SiO2 = np.where(yy.T < -self.height/2+0e-9,  # added 50 nm of silica for the LOCAs geometry
                            self.get_n_lambda(self.wavelength, 'SiO2')**2,
                            n_vacuum)
         

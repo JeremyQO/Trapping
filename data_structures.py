@@ -39,7 +39,7 @@ class datastruct:
         return True
     
     def export_to_eigenfolders(self, redorblue=''):
-        options = ['r1b1','r1b2','r2b1','r2b2']
+        options = ['r1b1','r1b2','r2b1','r2b2',]
         o1 = self.efields[0]
         o2 = self.efields[1]
         f1 = np.array([o1[0], o1[2], o1[1], o1[3], o1[4]], dtype=object)
@@ -60,6 +60,7 @@ class datastruct:
                     np.save(fname1, f1)
                 elif o[3]=='2' and not os.path.isfile(fname2):
                     np.save(fname2, f2)
+
         
     
     def plot_intensity(self, eigenfrequency, plot=True, cmap='jet'):
@@ -87,7 +88,7 @@ class datastruct:
     
     
 class comsol_data(datastruct):
-    def __init__(self, filename, n_eigenfrequencies=2, aoi=[]):
+    def __init__(self, filename, n_eigenfrequencies=2, aoi=[], power = 0):
         super().__init__()
         self.aoi = aoi
         self.convert = np.vectorize(self.convert_s)
@@ -97,7 +98,7 @@ class comsol_data(datastruct):
         self.wavelength=int(wavelength)*1e-10 if len(wavelength)==4 else int(wavelength)*1e-9
         self.width, self.height = self.get_waveguide_dimensions()
         # self.efield = [self.get_efield_from_csv(i) for i in range(n_eigenfrequencies)]   #TODO, this line instead of the next, in principle
-        self.efields = [self.get_efield_from_csv(0), self.get_efield_from_csv(0)]
+        self.efields = [self.get_efield_from_csv(0, power=power), self.get_efield_from_csv(0, power=power)]
         self.neffs = [self.get_neff_from_csv(0), self.get_neff_from_csv(0)]
         
         # TODO: add get_neff
@@ -134,7 +135,7 @@ class comsol_data(datastruct):
                 pass
         return neff
     
-    def get_efield_from_csv(self, eigenfrequency):
+    def get_efield_from_csv(self, eigenfrequency, power=0):
         df = pd.read_csv(self.filename, header=8)
         # self.df = df
         data = np.array([self.convert(el) for el in df.to_numpy().transpose()])
@@ -146,13 +147,17 @@ class comsol_data(datastruct):
         filen = filen.split("_")
         newstring = "H_"+filen[1]+"_W_"+filen[3]+"_P.csv"
         power_data = pd.read_csv(os.path.join(directory, newstring), header=4).to_numpy()
-        power = 0
-        for line in power_data:
-            try:
-                np.testing.assert_approx_equal(line[0], self.wavelength, significant=3)
-                power = line[-1]
-            except AssertionError:
-                pass
+        if power==0:
+            for i, line in enumerate(power_data):
+                try:
+                    np.testing.assert_approx_equal(line[0], self.wavelength, significant=3)
+                    if "TE" in self.filename and i%2==0:
+                        power = line[-1]
+                    elif "TM" in self.filename and i%2==1:
+                        power = line[-1]
+                except AssertionError:
+                    pass
+        
         x = np.unique(data[0])
         y = np.unique(data[1])
         z = np.array([0])

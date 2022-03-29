@@ -362,7 +362,6 @@ class trap:
         freq = np.sqrt(ret*2/m_Rb)/2/sc.pi
         if plot:
             plt.clf()
-            # plt.plot(z, pot,'.', label="Simulation")
             zz = np.linspace(-self.red.wavelength/4, self.red.wavelength/4, 200)
             plt.plot(zz, np.cos(beta*zz)**2*pot_min *1e-3*sc.k, label="Simulation")
             plt.plot(zz, p(zz), label="Polynomial fit, order %i"%(order))
@@ -373,6 +372,28 @@ class trap:
             plt.ylabel("Potential (J)")
             plt.tight_layout()
         return np.array([freq]*len(depths))
+    
+    def get_trap_frequencies(self, power_b, power_r):
+        fH = self.get_trap_frequency_H(power_b, power_r)
+        fL = self.get_trap_frequency_L(power_b, power_r)
+        f = self.get_trap_frequency(power_b, power_r)
+        return np.array([f, fH, fL])
+    
+    def trap_frequencies_map(self, max_pr=20e-3, n_points=100, plot=True):
+        b, r, d = self.optimize_powers(max_pr=max_pr, n_points=n_points, plot=False)
+        freqs = np.array([self.get_trap_frequencies(b[i], r[i]) for i in range(len(b))])
+        if plot:
+            plt.plot(-d, freqs[:,0,2]*1e-6, label="Frequency along x")
+            plt.plot(-d, freqs[:,1,1]*1e-6, label="Frequency along y, $m_F=-1$")
+            plt.plot(-d, freqs[:,1,2]*1e-6, label="Frequency along y, $m_F=0$")
+            plt.plot(-d, freqs[:,1,3]*1e-6, label="Frequency along y, $m_F=1$")
+            plt.plot(-d, freqs[:,2,2]*1e-6, label="Frequency along z")
+            plt.legend()
+            plt.ylabel("Trap frequency (MHz)")
+            plt.xlabel("Trap depth")
+            plt.tight_layout()
+        return freqs
+        
         
     def get_powers_for_mK(self, mK = -1, max_pr=20e-3, n_points=100, plot=True):
         b, r, d = self.optimize_powers(max_pr=max_pr, n_points=n_points, plot=plot)
@@ -413,18 +434,53 @@ class trap:
         
 if __name__=="__main__":
     # data_folder = os.path.join(os.getcwd(), "datafolder")
-    data_folder = os.path.join(os.getcwd(), "datafolder/690-850")
-    height = 150e-9
-    width = 1e-6
-    aoi = [-width/2, height/2+500e-9, width/2, height/2]
+    # data_folder = os.path.join(os.getcwd(), "datafolder/690-850")
+    # height = 150e-9
+    # width = 1e-6
+    # aoi = [-width/2, height/2+500e-9, width/2, height/2]
     
-    o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
-    o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
-    # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
-    # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
-    t = trap(o_blue, o_red, 1,1)
-    b,r = t.get_powers_for_mK(mK=-1, plot=False)
-    t.wavefunction(b, r) 
+    # o_red  = comsol_data(data_folder+"/H_150_W_1000_850.csv", aoi=aoi)
+    # o_blue = comsol_data(data_folder+"/H_150_W_1000_690.csv", aoi=aoi)
+    # # o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+    # # o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+    # t = trap(o_blue, o_red, 1,1)
+    # b,r = t.get_powers_for_mK(mK=-1, plot=False)
+    # t.plot_potential2d(b,r)
+    plt.figure()
+    if 1:
+        data_folder = os.path.join(os.getcwd(), "datafolder/400nm_700nm/mode_1st")
+        height = 400e-9
+        width = 700e-9
+        aoi = []#[-width/2, height/2+500e-9, width/2, height/2+50e-9]
+        o_red  = comsol_data(data_folder+"/H_400_W_700_850_TE.csv", aoi=aoi)
+        o_blue = comsol_data(data_folder+"/H_400_W_700_690_TE.csv", aoi=aoi)
+        # o_red  = comsol_data(data_folder+"/H_400_W_700_850_TE.csv", aoi=[])
+        # o_blue = comsol_data(data_folder+"/H_400_W_700_690_TE.csv", aoi=[])
+        t = trap(o_blue, o_red, 1,1)
+        b,r = t.get_powers_for_mK(mK=-1, plot=False)
+        t.plot_potential2d(b,r)
+        # o_blue.efields[0][4][:,196,160]
+        # o_red.efields[0][4][:,196,160]
+        # t.plot_potential2d(139e-3, 11.7e-3, remove_center=False)
+        a = t.get_potential1d(b,r)
+        np.savez("potential", x=a[0], pot=a[1])
+        
+        
+        
+    if 0:
+        data_folder = os.path.join(os.getcwd(), "datafolder/400nm")
+        height = 400e-9
+        width = 700e-9
+        aoi = [-width/2, height/2+500e-9, width/2, height/2]
+        # aoi = []
+        o_blue = emepy_data(data_folder, height, width, 690e-9, 1000, aoi, [], [], 2)
+        o_red =  emepy_data(data_folder, height, width, 850e-9, 1000, aoi, [], [], 2)
+        t = trap(o_blue, o_red, 1,1)
+        b,r = t.get_powers_for_mK(mK=-1, plot=True)
+        t.plot_potential2d(b,r)
+    # a = t.get_trap_frequencies(b, r)
+    # a=t.trap_frequencies_map()
+    # t.wavefunction(b, r)
     # t.plot_potential1d_H(b,r)
     # print(t.get_trap_frequency(b,r, plot=1))
     # print(t.get_trap_frequency_H(b,r, plot=1))
@@ -436,6 +492,32 @@ if __name__=="__main__":
     # d,p,x,y = t.map_trap_depth_pos(1000, plot=True)
     # string = "Height = 150nm. Width = 1000 nm. LOCAs. Blue wavelength = 690 nm. Red wavelength = 850 nm. Rubidium 87 in F=2. Atom trapped bove the waveguide. Powers are expressed in watts "
     # np.savez_compressed('depth_pos', depth=d, position=p, blue_power=x, red_power=y, readme=string)
+    if False:
+        dta=np.load("depth_pos.npz")
+        d=dta['depth'] 
+        p = dta['position']
+        x = dta['blue_power']
+        y = dta['red_power']
+        plt.figure()
+        plt.plot(y*1e3,d[917], label='Constant Blue')
+        plt.xlabel("Power of red detuned laser (mW)", )
+        plt.ylabel("Trap depth (mK)", )
+        plt.legend()
+        plt.tight_layout()
+        plt.figure()
+        plt.plot(x*1e3,d[:,745], label='Constant Red')
+        plt.xlabel("Power of blue detuned laser (mW)", )
+        plt.ylabel("Trap depth (mK)", )
+        plt.legend()
+        plt.tight_layout()
+        
+    # blue_d = 53e-3
+    # red_d = -720e-3
+    # # Tolerance in percent for 10% of trap depth =100 uK
+    # p_b = 1/(blue_d)/(b*1e3)*100
+    # p_r = 1/(red_d)/(r*1e3)*100
+    # print("Blue percentage: %.2f"%abs(p_b))
+    # print("Red percentage: %.2f"%abs(p_r))
     # t.plot_potential1d(50e-3,0.2e-3)
     # from scipy import interpolate
     # depth = interpolate.interp2d(x, y, d, kind='linear', fill_value=0)
@@ -446,14 +528,7 @@ if __name__=="__main__":
     # pp = pos(xx,yy)
     # plt.imshow(pp)    
     # plt.imshow(dd)    
-    # plt.figure()
-    # plt.clf()
-    # # plt.plot(y*1e3,d[917], label='Constant Blue')
-    # plt.plot(y*1e3,d[917], label='Constant Blue')
-    # plt.xlabel("Power of red detuned laser (mW)", )
-    # plt.ylabel("Trap depth (mK)", )
-    # plt.legend()
-    # plt.tight_layout()
+
     # plt.figure()
     # plt.plot(y[:-1]*1e3, np.diff(d[917])/np.diff(y*1e3))
     # plt.plot(x[:-1]*1e3, np.diff(d[:,745])/np.diff(x*1e3))
@@ -481,9 +556,9 @@ if __name__=="__main__":
     # print(30/(57-49.5))
     
     # # plt.figure()
-    # # plt.clf()
-    # # plt.plot(x[:-1]*1e3,np.diff(p[:,745]*1e9)/np.diff(x*1e3), label='Constant Red')
-    # # plt.xlabel("Power of blue detuned laser (mW)", )
+    # plt.clf()
+    # plt.plot(x[:-1]*1e3,np.diff(p[:,745]*1e9)/np.diff(x*1e3), label='Constant Red')
+    # plt.xlabel("Power of blue detuned laser (mW)", )
     # # plt.legend()
     # # plt.tight_layout()
     
@@ -540,42 +615,6 @@ if __name__=="__main__":
 
     # t.plot_potential2d(75e-3,7e-3, includeVdW=True, remove_center=True)    
     # t.get_trap_depht_and_position(65e-3,7e-3)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    # files = ["H_150_W_1000_6900_eigen1_1000c.npz","H_150_W_1000_6900_eigen2_1000c.npz",
-    #           "H_150_W_1000_8500_eigen1_1000c.npz", "H_150_W_1000_8500_eigen2_1000c.npz"]
-    # files = ["H_150_W_1000_8500_eigen2_1000c.npz"]
-    # data_folder = os.path.join(os.getcwd(), "datafolder")
-    # fs = np.array([os.path.join(data_folder, f) for f in files])
-    # for i in range(1):
-    #     d = np.load(fs[i], allow_pickle=True)
-    #     neff = d['neff']
-    #     fa = d['formatted_array']
-    #     mu0 = 4*np.pi*1e-7
-    #     c = 299792458    
-    #     fa4 = fa[4]* np.sqrt(mu0 * c)
-    #     fa[4]=fa4
-    #     print(fs[i].replace("c","").replace(".npz",""))
-    #     np.savez_compressed(fs[i].replace("c.npz",""), formatted_array=fa, neff=neff)
-
-    
-    
-    
-    
-    
-    
-    
     
     
     
